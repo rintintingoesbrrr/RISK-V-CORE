@@ -44,8 +44,12 @@
    
    
    //PC main logic 
-   $next_pc[31:0] = >>1$pc;
-   $pc[31:0] = $reset ? 0: $next_pc + 1;
+   $pc[31:0] = >>1$next_pc;
+   $next_pc[31:0] = $reset ? 32'b0 : 
+                    $taken_br ? $br_tgt_pc :
+                    $is_jal ? $br_tgt_pc :
+                    $is_jalr ? $jalr_tgt_pc :
+                    ($pc[31:0] + 32'd4);
    
    // macro for readonly memory array
    `READONLY_MEM($pc, $$instr[31:0]);
@@ -119,14 +123,35 @@
    $is_addi = $dec_bits ==? 11'bx_000_0010011;
    $is_add = $dec_bits ==? 11'b0_000_0110011;
 
+   //Airthmetic Logic Unit
+   
+   $result[31:0] =
+    $is_addi ? $src1_value + $imm :
+    $is_add ? $src1_value + $src2_value:
+    
+               32'b0;
+   
+   //Branch instructions 
+   // we need to check for the differnte branch states a branch can have
+   
+   
+   $taken_br = $is_beq ? ($src1_value == $src2_value ? 1'b1 : 1'b0) :
+               $is_bne ? ($src1_value != $src2_value ? 1'b1 : 1'b0) :
+               $is_blt ? (($src1_value < $src2_value) ^ ($src1_value[31] != $src2_value[31]) ? 1'b1 : 1'b0) :
+               $is_bge ? (($src1_value >= $src2_value) ^ ($src1_value[31] != $src2_value[31]) ? 1'b1 : 1'b0) :
+               $is_bltu ? ($src1_value < $src2_value ? 1'b1 : 1'b0) :
+               $is_bgeu ? ($src1_value >= $src2_value ? 1'b1 : 1'b0) :
+               1'b0 ;
+   
+   
+   // set te target PC of the branch instruction using its imm value
+   $br_tgt_pc[31:0] = $pc + $imm;
 
-   
-   
    // Assert these to end simulation (before Makerchip cycle limit).
-   *passed = 1'b0;
+   m4+tb()
    *failed = *cyc_cnt > M4_MAX_CYC;
    
-   m4+rf(32, 32, $reset, $wr_en, $wr_index[4:0], $wr_data[31:0], $rd_en1, $rs1[4:0], $src1_value, $rd_en2, $rs2[4:0], $src2_value)
+   m4+rf(32, 32, $reset, $wr_en, $wr_index[4:0], $result[31:0], $rd_en1, $rs1[4:0], $src1_value, $rd_en2, $rs2[4:0], $src2_value)
    //m4+dmem(32, 32, $reset, $addr[4:0], $wr_en, $wr_data[31:0], $rd_en, $rd_data)
    m4+cpu_viz()
 \SV
